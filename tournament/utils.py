@@ -25,20 +25,24 @@ def map_image(team1_state, team2_state, soccer_state, resolution=512, extent=65,
     BLUE_COLOR = (0x20, 0x4a, 0x87)
     BALL_COLOR = (0x2e, 0x34, 0x36)
     from PIL import Image, ImageDraw
-    r = Image.new('RGB', (resolution*anti_alias, resolution*anti_alias), BG_COLOR)
+    r = Image.new('RGB', (resolution*anti_alias,
+                  resolution*anti_alias), BG_COLOR)
 
     def _to_coord(x):
         return resolution * anti_alias * (x + extent) / (2 * extent)
 
     draw = ImageDraw.Draw(r)
     # Let's draw the goal line
-    draw.line([(_to_coord(x), _to_coord(y)) for x, _, y in soccer_state['goal_line'][0]], width=5*anti_alias, fill=RED_COLOR)
-    draw.line([(_to_coord(x), _to_coord(y)) for x, _, y in soccer_state['goal_line'][1]], width=5*anti_alias, fill=BLUE_COLOR)
+    draw.line([(_to_coord(x), _to_coord(y)) for x, _,
+              y in soccer_state['goal_line'][0]], width=5*anti_alias, fill=RED_COLOR)
+    draw.line([(_to_coord(x), _to_coord(y)) for x, _,
+              y in soccer_state['goal_line'][1]], width=5*anti_alias, fill=BLUE_COLOR)
 
     # and the ball
     x, _, y = soccer_state['ball']['location']
     s = soccer_state['ball']['size']
-    draw.ellipse((_to_coord(x-s), _to_coord(y-s), _to_coord(x+s), _to_coord(y+s)), width=2*anti_alias, fill=BALL_COLOR)
+    draw.ellipse((_to_coord(x-s), _to_coord(y-s), _to_coord(x+s),
+                 _to_coord(y+s)), width=2*anti_alias, fill=BALL_COLOR)
 
     # and karts
     for c, s in [(BLUE_COLOR, team1_state), (RED_COLOR, team2_state)]:
@@ -47,8 +51,10 @@ def map_image(team1_state, team2_state, soccer_state, resolution=512, extent=65,
             fx, _, fy = k['kart']['front']
             sx, _, sy = k['kart']['size']
             s = (sx+sy) / 2
-            draw.ellipse((_to_coord(x - s), _to_coord(y - s), _to_coord(x + s), _to_coord(y + s)), width=5*anti_alias, fill=c)
-            draw.line((_to_coord(x), _to_coord(y), _to_coord(x+(fx-x)*2), _to_coord(y+(fy-y)*2)), width=4*anti_alias, fill=0)
+            draw.ellipse((_to_coord(x - s), _to_coord(y - s), _to_coord(x + s),
+                         _to_coord(y + s)), width=5*anti_alias, fill=c)
+            draw.line((_to_coord(x), _to_coord(y), _to_coord(x+(fx-x)*2),
+                      _to_coord(y+(fy-y)*2)), width=4*anti_alias, fill=0)
 
     if anti_alias == 1:
         return r
@@ -80,6 +86,7 @@ class VideoRecorder(BaseRecorder):
     """
         Produces pretty output videos
     """
+
     def __init__(self, video_file):
         import imageio
         self._writer = imageio.get_writer(video_file, fps=20)
@@ -90,7 +97,8 @@ class VideoRecorder(BaseRecorder):
                                                          'Blue: %d' % soccer_state['score'][1],
                                                          'Red: %d' % soccer_state['score'][0])))
         else:
-            self._writer.append_data(np.array(map_image(team1_state, team2_state, soccer_state)))
+            self._writer.append_data(
+                np.array(map_image(team1_state, team2_state, soccer_state)))
 
     def __del__(self):
         if hasattr(self, '_writer'):
@@ -103,7 +111,8 @@ class DataRecorder(BaseRecorder):
         self._data = []
 
     def __call__(self, team1_state, team2_state, soccer_state, actions, team1_images=None, team2_images=None):
-        data = dict(team1_state=team1_state, team2_state=team2_state, soccer_state=soccer_state, actions=actions)
+        data = dict(team1_state=team1_state, team2_state=team2_state,
+                    soccer_state=soccer_state, actions=actions)
         if self._record_images:
             data['team1_images'] = team1_images
             data['team2_images'] = team2_images
@@ -117,13 +126,14 @@ class DataRecorder(BaseRecorder):
 
 
 class StateRecorder(BaseRecorder):
-    def __init__(self, state_action_file, record_images=False):
+    def __init__(self, state_action_file, record_images=True):
         self._record_images = record_images
         self._f = open(state_action_file, 'wb')
 
     def __call__(self, team1_state, team2_state, soccer_state, actions, team1_images=None, team2_images=None):
         from pickle import dump
-        data = dict(team1_state=team1_state, team2_state=team2_state, soccer_state=soccer_state, actions=actions)
+        data = dict(team1_state=team1_state, team2_state=team2_state,
+                    soccer_state=soccer_state, actions=actions)
         if self._record_images:
             data['team1_images'] = team1_images
             data['team2_images'] = team2_images
@@ -143,4 +153,3 @@ def load_recording(recording):
                 yield load(f)
             except EOFError:
                 break
-
