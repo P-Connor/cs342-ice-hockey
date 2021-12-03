@@ -9,6 +9,7 @@ TIMEOUT_STEP = 0.1  # seconds
 
 RunnerInfo = namedtuple('RunnerInfo', ['agent_type', 'error', 'total_act_time'])
 
+USE_GRAPHICS = True
 
 def to_native(o):
     # Super obnoxious way to hide pystk
@@ -308,7 +309,7 @@ if __name__ == '__main__':
             recorder = recorder & utils.StateRecorder(args.record_state)
 
         # Start the match
-        match = Match(use_graphics=team1.agent_type == 'image' or team2.agent_type == 'image')
+        match = Match(use_graphics=USE_GRAPHICS)
         try:
             result = match.run(team1, team2, args.num_players, args.num_frames, max_score=args.max_score,
                                initial_ball_location=args.ball_location, initial_ball_velocity=args.ball_velocity,
@@ -346,7 +347,7 @@ if __name__ == '__main__':
                 recorder = remote.RayStateRecorder.remote(args.record_state.replace(ext, f'.{i}{ext}'))
 
             match = remote.RayMatch.remote(logging_level=getattr(logging, environ.get('LOGLEVEL', 'WARNING').upper()),
-                                           use_graphics=team1_type == 'image' or team2_type == 'image')
+                                           use_graphics=USE_GRAPHICS)
             result = match.run.remote(team1, team2, args.num_players, args.num_frames, max_score=args.max_score,
                                       initial_ball_location=args.ball_location,
                                       initial_ball_velocity=args.ball_velocity,
