@@ -1,4 +1,8 @@
 
+import numpy as np
+import math, random
+
+
 class Team:
     agent_type = 'image'
 
@@ -9,6 +13,7 @@ class Team:
         """
         self.team = None
         self.num_players = None
+        self.test_target = [20, 0, 20]
 
     def new_match(self, team: int, num_players: int) -> list:
         """
@@ -61,5 +66,47 @@ class Team:
                  rescue:       bool (optional. no clue where you will end up though.)
                  steer:        float -1..1 steering angle
         """
-        # TODO: Change me. I'm just cruising straight
-        return [dict(acceleration=1, steer=0)] * self.num_players
+
+        # TODO: Get puck location from model
+        puck_location = np.array([-20,0,10])
+
+        ret = []
+        for player in player_state:
+          
+          # Populate this with the actions we will take for this player
+          actions = dict()
+          
+          # TODO: Calculate a drive target based on puck location and other variables
+          target = self.test_target
+
+          # Get some preliminary information
+          current_location = np.array(player['kart']['location'])
+          current_location[1] = 0   # Remove y coordinate
+          distance_to_target = np.linalg.norm(target - current_location)
+
+          # Find angle_to_target, mapped from -1 to 1
+          facing = player['kart']['front'] - current_location
+          facing[1] = 0   # Remove y coordinate
+          facing_u = facing / np.linalg.norm(facing)
+          to_target = target - current_location
+          to_target_u = to_target / np.linalg.norm(to_target)
+          angle_to_target = (np.arccos(np.clip(np.dot(facing_u, to_target_u), -1.0, 1.0)) / math.pi) * np.sign(np.cross(facing_u, to_target_u)[1])
+          print(angle_to_target, distance_to_target)
+
+          # Handle steering/drifting
+          actions['steer'] = angle_to_target * 5
+          actions['drift'] = 0.2 < abs(angle_to_target) < 0.4
+          
+          # Calculate acceleration/braking
+          actions['acceleration'] = 1 - abs(angle_to_target) * 3
+          actions['brake'] = abs(angle_to_target) > 0.5
+
+          # Reset if stuck (handle this better later)
+          actions['rescue'] = actions['acceleration'] > 0.3 and np.linalg.norm(player['kart']['velocity']) < 0.05
+
+          if(distance_to_target < 3):
+            self.test_target = [random.randint(-20, 20), 0, random.randint(-20, 20)]
+          
+          ret.append(actions)
+        
+        return ret
