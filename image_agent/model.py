@@ -18,7 +18,7 @@ class PuckLocator(torch.nn.Module):
         def forward(self, x):
             return F.relu(self.b3(self.c3(F.relu(self.b2(self.c2(F.relu(self.b1(self.c1(x)))))))) + self.skip(x))
 
-    def __init__(self, layers=[16, 32, 64, 128], n_output_channels=6, kernel_size=3):
+    def __init__(self, layers=[16, 32, 64, 128], n_output_channels=3, kernel_size=3):
         super().__init__()
         L = []
         c = 3
@@ -29,5 +29,5 @@ class PuckLocator(torch.nn.Module):
         self.classifier = torch.nn.Linear(c, n_output_channels)
 
     def forward(self, x):
-        z = self.network(x)
-        return self.classifier(z.mean(dim=[2, 3]))
+        z = self.network(torch.flatten(x))
+        return self.classifier(z.mean(dim=[2]]))

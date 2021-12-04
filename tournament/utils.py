@@ -110,12 +110,13 @@ class DataRecorder(BaseRecorder):
         self._record_images = record_images
         self._data = []
 
-    def __call__(self, team1_state, team2_state, soccer_state, actions, team1_images=None, team2_images=None):
+    def __call__(self, team1_state, team2_state, soccer_state, actions, team1_images=None, team2_images=None, team1_instance=None):
         data = dict(team1_state=team1_state, team2_state=team2_state,
                     soccer_state=soccer_state, actions=actions)
         if self._record_images:
             data['team1_images'] = team1_images
             data['team2_images'] = team2_images
+            data['team1_instance'] = team1_instance
         self._data.append(data)
 
     def data(self):
@@ -130,13 +131,14 @@ class StateRecorder(BaseRecorder):
         self._record_images = record_images
         self._f = open(state_action_file, 'wb')
 
-    def __call__(self, team1_state, team2_state, soccer_state, actions, team1_images=None, team2_images=None):
+    def __call__(self, team1_state, team2_state, soccer_state, actions, team1_images=None, team2_images=None, team1_instance=None):
         from pickle import dump
         data = dict(team1_state=team1_state, team2_state=team2_state,
                     soccer_state=soccer_state, actions=actions)
         if self._record_images:
             data['team1_images'] = team1_images
             data['team2_images'] = team2_images
+            data['team1_instance'] = team1_instance
         dump(dict(data), self._f)
         self._f.flush()
 

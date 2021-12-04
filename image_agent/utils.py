@@ -6,8 +6,12 @@ from . import dense_transforms
 
 
 def _to_image(x, proj, view):
-    p = proj @ view @ np.array(list(x) + [1])
-    print(np.array([p[0] / p[-1], -p[1] / p[-1]]))
+    proj, view = np.array(proj).T, np.array(view).T
+    # print(proj)
+    # print(view)
+    p = proj.dot(view.dot(np.array(list(x) + [1])))
+    # print(np.array([p[0] / p[-1], -p[1] / p[-1]]))
+    # print(p)
     return np.clip(np.array([p[0] / p[-1], -p[1] / p[-1]]), -1, 1)
 
 def load_recording(recording):
@@ -22,27 +26,36 @@ def load_recording(recording):
 def generateImages(args):
     i = args.start_at
     for frame, r in enumerate(load_recording(args.dataset_path)):
-        
+        # print(r.keys())
+        # print(r['soccer_state'].keys())
+        # print(r['soccer_state']['ball'])
+        # print(r['team1_instance'][0])
+        # print(r['soccer_state']['ball']['id'] in r['team1_instance'][0])
+        # stop[0]
         # Only collect one out of every args.skip_every frames
         if(frame % args.skip_every != 0):
             continue
+
+        
 
         imgs = r['team1_images']
         players = r['team1_state']
         assert(len(imgs) == len(players))
         assert(r['team1_images'] is not None)
         
-        for (img, player) in zip(imgs, players):
+        for j, (img, player) in enumerate(zip(imgs, players)):
             imageio.imwrite(f'{args.save_path}/{i:05d}.png', img)
             
             puck_location = r['soccer_state']['ball']['location']
-            puck_location_screen = _to_image(puck_location, player['camera']['projection'], player['camera']['view'])
-            is_off_screen = 1 if abs(puck_location_screen[0]) == 1.0 or abs(puck_location_screen[1]) == 1.0 else 0
-            print(player['camera'])
-            if(is_off_screen == 1):
-                print(i, puck_location_screen)
+            player_location = player['kart']['location']
+            player_facing = player['kart']['front'] - np.array(player_location)
+            player_facing_u = player_facing / np.linalg.norm(player_facing)
+            # puck_location_screen = _to_image(puck_location, player['camera']['projection'], player['camera']['view'])
+            
+            puck_on_screen = [r['soccer_state']['ball']['id'] in r['team1_instance'][j]]
+            puck_location[1] = puck_location[1] if not puck_on_screen else -1
             np.savetxt(f'{args.save_path}/{i:05d}.csv',
-                [np.concatenate((puck_location, [is_off_screen]))], delimiter=',', fmt='%.3f')
+                [np.concatenate((puck_location, player_location, player_facing_u))], delimiter=',', fmt='%.3f')
             i += 1
 
     print("Finished generating " + str(i) + " images\n")

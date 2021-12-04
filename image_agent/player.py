@@ -2,7 +2,6 @@
 import numpy as np
 import math, random
 
-
 class Team:
     agent_type = 'image'
 
@@ -91,7 +90,7 @@ class Team:
           to_target = target - current_location
           to_target_u = to_target / np.linalg.norm(to_target)
           angle_to_target = (np.arccos(np.clip(np.dot(facing_u, to_target_u), -1.0, 1.0)) / math.pi) * np.sign(np.cross(facing_u, to_target_u)[1])
-          print(angle_to_target, distance_to_target)
+          # print(angle_to_target, distance_to_target)
 
           # Handle steering/drifting
           actions['steer'] = angle_to_target * 5

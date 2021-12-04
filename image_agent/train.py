@@ -30,14 +30,17 @@ def train(args):
     import inspect
     transform = eval(args.transform, {k: v for k, v in inspect.getmembers(dense_transforms) if inspect.isclass(v)})
 
-    train_data = load_data('drive_data', transform=transform, num_workers=args.num_workers)
+    train_data = load_data('image_data', transform=transform, num_workers=args.num_workers)
 
-    global_step = 0
-    for epoch in range(args.num_epoch):
+    global_step = 0 + args.start_at * len(train_data)
+    for epoch in range(args.start_at, args.num_epoch):
         model.train()
         losses = []
         for img, label in train_data:
             img, label = img.to(device), label.to(device)
+
+            # Remove player location and facing direction from label
+            label = label[0:2:1]
 
             pred = model(img)
             loss_val = loss(pred, label)
@@ -55,8 +58,7 @@ def train(args):
             losses.append(loss_val.detach().cpu().numpy())
         
         avg_loss = np.mean(losses)
-        if train_logger is None:
-            print('epoch %-3d \t loss = %0.3f' % (epoch, avg_loss))
+        print('Finished epoch %-3d \t loss = %0.3f' % (epoch, avg_loss))
         save_model(model)
 
     save_model(model)
@@ -85,6 +87,7 @@ if __name__ == '__main__':
     parser.add_argument('-lr', '--learning_rate', type=float, default=1e-3)
     parser.add_argument('-c', '--continue_training', action='store_true')
     parser.add_argument('-t', '--transform', default='Compose([ColorJitter(0.2, 0.5, 0.5, 0.2), RandomHorizontalFlip(), ToTensor()])')
+    parser.add_argument('--start_at', type=int, default=0)
 
     args = parser.parse_args()
     train(args)
