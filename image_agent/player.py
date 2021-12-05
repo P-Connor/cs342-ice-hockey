@@ -2,11 +2,9 @@
 import numpy as np
 import math
 import random
-# from torch import load
 import torch
 from grader import utils
 from torchvision.transforms import functional as F
-# from image_agent import utils
 
 
 class Team:
@@ -21,7 +19,6 @@ class Team:
         self.num_players = None
         self.test_target = [20, 0, 20]
         self.model = utils.load_model()
-        # utils.load_model()
 
     def new_match(self, team: int, num_players: int) -> list:
         """
