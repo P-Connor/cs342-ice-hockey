@@ -1,11 +1,122 @@
 
+from image_agent.utils import _to_image
+from torchvision.transforms import functional as F
+from image_agent import utils
+import matplotlib.pyplot as plt
 import numpy as np
 import math
 import random
+import copy
 import torch
-from grader import utils
-from torchvision.transforms import functional as F
-from image_agent.utils import _to_image
+import matplotlib
+matplotlib.use('Agg')
+
+
+DEBUG = True
+
+
+class Player:
+    def __init__(self):
+        # Current kart info
+        self.location = np.array([0, 0, 0])
+        self.velocity = np.array([0, 0, 0])
+        self.speed = 0
+        self.heading = np.array([0, 0, 0])
+
+        # Persistent player info
+        self.stuck_counter = 0
+        self.reverse_cooldown = 0
+
+        # Target information
+        self.target = {"location": [0, 0, 0], "heading": [0, 0, 1], "speed": 0}
+        self.to_target = np.array([0, 0, 0])
+        self.angle_to_target = 0
+        self.distance_to_target = 0
+
+    def update_state(self, kart_state):
+        self.location = np.array(kart_state['location'])
+        self.velocity = np.array(kart_state['velocity'])
+        self.speed = np.linalg.norm(self.velocity)
+        self.heading = kart_state['front'] - self.location
+        self.heading /= np.linalg.norm(self.heading)  # normalize
+
+        # TODO tune speed value
+        if(self.speed < 0.3):
+            self.stuck_counter += 1
+
+        self.update_target(self.target)
+
+    def update_target(self, target):
+        self.target = target
+        self.to_target = target['location'] - self.location
+        self.distance_to_target = np.linalg.norm(self.to_target)
+        self.to_target /= np.linalg.norm(self.to_target)  # normalize
+        self.angle_to_target = ((np.arccos(np.clip(np.dot(self.heading, self.to_target), -1.0, 1.0)) / math.pi)
+                                * np.sign(np.cross(self.heading, self.to_target)[1]))
+
+    # Computes the drive actions to reach the player's current target based on its current state
+    # and returns the actions as a dict
+
+    def drive(self):
+        # Handle steering/drifting
+        steer = self.angle_to_target * 8
+        drift = False
+
+        # Calculate acceleration/braking
+        brake = abs(self.angle_to_target) > 0.2
+        acceleration = 0
+        if(brake):
+            self.reverse_cooldown = 4
+            steer = -steer
+        elif self.reverse_cooldown > 0:
+            steer = -steer
+            self.reverse_cooldown -= 1
+        else:
+            acceleration = (1 - abs(self.angle_to_target) * 5) + 0.1
+
+        # Reset if stuck (handle this better later)
+        # rescue = acceleration > 0.3 and np.linalg.norm(player['kart']['velocity']) < 0.05
+        rescue = False
+        nitro = False
+        fire = False
+
+        return {
+            "acceleration": acceleration,
+            "brake": brake,
+            "drift": drift,
+            "fire": fire,
+            "nitro": nitro,
+            "rescue": rescue,
+            "steer": steer
+        }
+
+    # Returns a score based on how easily this player can reach its current target.
+    # The lower the score the quicker the player will be able to reach.
+    # If this is below a certain threshold the target can be considered already reached.
+    def score(self):
+        # TODO calculate better score
+        return self.distance_to_target
+
+    # Returns a score based on how easily this player can reach the specified potential target.
+    # The lower the score the quicker the player will be able to reach.
+    # If this is below a certain threshold the target can be considered already reached.
+    def try_target(self, target):
+        old_target = copy.deepcopy(self.target)
+        self.target = target
+        score = self.score()
+        self.target = old_target
+        return score
+
+    # Plots this current player and their target info to the primary matplotlib plot
+    def plot(self):
+        plt.plot(self.location[0], self.location[2], ".")
+        plt.plot([self.location[0], self.location[0] + self.heading[0] * 3],
+                 [self.location[2], self.location[2] + self.heading[2] * 3])
+        plt.plot(self.target['location'][0], self.target['location'][2], "x")
+        plt.plot([self.target['location'][0], self.target['location'][0] + self.target['heading'][0] * 3],
+                 [self.target['location'][2], self.target['location'][2] + self.target['heading'][2] * 3])
+        plt.xticks(range(-50, 60, 10))
+        plt.yticks(range(-60, 70, 10))
 
 
 class Team:
@@ -18,9 +129,11 @@ class Team:
         """
         self.team = None
         self.num_players = None
-        self.test_target = [20, 0, 20]
         self.model = utils.load_model()
-        self.i = 0
+        self.players = []
+        if DEBUG:
+            self.frame = 0
+            plt.figure(figsize=(12, 6), dpi=80)
 
     def new_match(self, team: int, num_players: int) -> list:
         """
@@ -36,6 +149,7 @@ class Team:
            TODO: feel free to edit or delete any of the code below
         """
         self.team, self.num_players = team, num_players
+        self.players = [Player() for i in range(num_players)]
         return ['tux'] * num_players
 
     def act(self, player_state, player_image):
@@ -85,10 +199,13 @@ class Team:
 
         # checks results from model. If puck position unknown, set to None
         puck_location = None
-        if pos_puck_location[0][1] != -1:
+        if pos_puck_location[0][1] <= -0.5:
             puck_location = pos_puck_location[0]
-        elif pos_puck_location[1][1] != -1:
+        elif pos_puck_location[1][1] <= -0.5:
             puck_location = pos_puck_location[1]
+
+        if puck_location is not None:
+            puck_location = puck_location.detach().numpy()
 
         import matplotlib.pyplot as plt
         import torchvision.transforms.functional as TF
@@ -102,51 +219,43 @@ class Team:
         WH2 = np.array([img.shape[1], img.shape[0]])/2
         ax.add_artist(plt.Circle(
             WH2*(pred+1), 2, ec='r', fill=False, lw=1.5))
-        if self.i % 50 == 0:
-            plt.show()
-
-        self.i += 1
 
         ret = []
-        for player in player_state:
+        assert(len(self.players) == len(player_state))
+        for i, (player, state) in enumerate(zip(self.players, player_state)):
             # self.model(player_image, player_state[0]['kart']['location'])
-            # Populate this with the actions we will take for this player
-            actions = dict()
 
             # TODO: Calculate a drive target based on puck location and other variables
-            target = self.test_target
+            # target = self.test_target
 
-            # Get some preliminary information
-            current_location = np.array(player['kart']['location'])
-            current_location[1] = 0   # Remove y coordinate
-            distance_to_target = np.linalg.norm(target - current_location)
+            player.update_state(state['kart'])
 
-            # Find angle_to_target, mapped from -1 to 1
-            facing = player['kart']['front'] - current_location
-            facing[1] = 0   # Remove y coordinate
-            facing_u = facing / np.linalg.norm(facing)
-            to_target = target - current_location
-            to_target_u = to_target / np.linalg.norm(to_target)
-            angle_to_target = (np.arccos(np.clip(np.dot(facing_u, to_target_u), -1.0, 1.0)
-                                         ) / math.pi) * np.sign(np.cross(facing_u, to_target_u)[1])
-            # print(angle_to_target, distance_to_target)
+            if(player.score() < 3):
+                player.update_target({
+                    "location": [random.randint(-20, 20), 0, random.randint(-20, 20)],
+                    "heading": [random.randint(-1, 1), 0, random.randint(-1, 1)],
+                    "speed": [random.randint(0, 10)]
+                })
 
-            # Handle steering/drifting
-            actions['steer'] = angle_to_target * 5
-            actions['drift'] = 0.2 < abs(angle_to_target) < 0.4
+            if DEBUG:
+                plt.subplot(1, len(self.players), i + 1)
+                player.plot()
+                if(puck_location is not None):
+                    plt.plot(puck_location[0], puck_location[2], "h")
+                    plt.xticks(range(-50, 60, 10))
+                    plt.yticks(range(-60, 70, 10))
 
-            # Calculate acceleration/braking
-            actions['acceleration'] = 1 - abs(angle_to_target) * 3
-            actions['brake'] = abs(angle_to_target) > 0.5
+            ret.append(player.drive())
 
-            # Reset if stuck (handle this better later)
-            actions['rescue'] = actions['acceleration'] > 0.3 and np.linalg.norm(
-                player['kart']['velocity']) < 0.05
+        if DEBUG:
+            plt.savefig("plot/" + str(self.frame) + ".png")
+            self.frame += 1
+            plt.clf()
 
-            if(distance_to_target < 3):
-                self.test_target = [
-                    random.randint(-20, 20), 0, random.randint(-20, 20)]
-
-            ret.append(actions)
+        # ret = [{"acceleration": .1, "steer": 0 if len(self.x) < 20 else 1}, {"acceleration": 0, "steer": 1}]
+        # self.x.append(player_state[0]['kart']['location'][0])
+        # self.z.append(player_state[0]['kart']['location'][2])
+        # plt.plot(self.x, self.z)
+        # plt.savefig("temp.png")
 
         return ret

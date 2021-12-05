@@ -26,7 +26,7 @@ def train(args):
     model = model.to(device)
     if args.continue_training:
         model.load_state_dict(torch.load(
-            path.join(path.dirname(path.abspath(__file__)), 'planner.th')))
+            path.join(path.dirname(path.abspath(__file__)), 'puck_locator.th')))
 
     loss = torch.nn.L1Loss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
@@ -41,7 +41,7 @@ def train(args):
         'image_data/valid', num_workers=args.num_workers, mats=True)
 
     global_step = 0 + args.start_at * len(train_data)
-    for epoch in range(args.start_at, args.num_epoch):
+    for epoch in range(args.start_at, args.start_at + args.num_epoch):
         model.train()
         losses = []
         for img, pos, label in train_data:

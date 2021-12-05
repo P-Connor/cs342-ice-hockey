@@ -91,7 +91,7 @@ class VideoRecorder(BaseRecorder):
         import imageio
         self._writer = imageio.get_writer(video_file, fps=20)
 
-    def __call__(self, team1_state, team2_state, soccer_state, actions, team1_images=None, team2_images=None):
+    def __call__(self, team1_state, team2_state, soccer_state, actions, team1_images=None, team2_images=None, team1_instance=None):
         if team1_images and team2_images:
             self._writer.append_data(np.array(video_grid(team1_images, team2_images,
                                                          'Blue: %d' % soccer_state['score'][1],
