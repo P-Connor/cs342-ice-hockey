@@ -1,3 +1,4 @@
+from os import replace
 import numpy as np
 import imageio
 # from .model import PuckLocator
@@ -9,11 +10,7 @@ from . import dense_transforms
 
 def _to_image(x, proj, view):
     proj, view = np.array(proj).T, np.array(view).T
-    # print(proj)
-    # print(view)
     p = proj.dot(view.dot(np.array(list(x) + [1])))
-    # print(np.array([p[0] / p[-1], -p[1] / p[-1]]))
-    # print(p)
     return np.clip(np.array([p[0] / p[-1], -p[1] / p[-1]]), -1, 1)
 
 
@@ -30,12 +27,6 @@ def load_recording(recording):
 def generateImages(args):
     i = args.start_at
     for frame, r in enumerate(load_recording(args.dataset_path)):
-        # print(r.keys())
-        # print(r['soccer_state'].keys())
-        # print(r['soccer_state']['ball'])
-        # print(r['team1_instance'][0])
-        # print(r['soccer_state']['ball']['id'] in r['team1_instance'][0])
-        # stop[0]
         # Only collect one out of every args.skip_every frames
         if(frame % args.skip_every != 0):
             continue
@@ -57,26 +48,35 @@ def generateImages(args):
             puck_on_screen = [r['soccer_state']['ball']
                               ['id'] in r['team1_instance'][j]]
             puck_location[1] = puck_location[1] if not puck_on_screen else -1
-            np.savetxt(f'{args.save_path}/{i:05d}.csv',
-                       [np.concatenate((puck_location, player_location, player_facing_u))], delimiter=',', fmt='%.3f')
+            np.savez(f'{args.save_path}/{i:05d}.npz', puck_location=puck_location, player_location=player_location,
+                     player_facing_u=player_facing_u, proj=player['camera']['projection'], view=player['camera']['view'])
             i += 1
 
     print("Finished generating " + str(i) + " images\n")
 
 
 class SuperTuxDataset(Dataset):
-    def __init__(self, dataset_path, transform=dense_transforms.ToTensor()):
+    def __init__(self, dataset_path, transform=dense_transforms.ToTensor(), mats=False):
         from PIL import Image
         from glob import glob
         from os import path
         self.data = []
-        for f in glob(path.join(dataset_path, '*.csv')):
-            i = Image.open(f.replace('.csv', '.png'))
-
+        form = '*.npz' if mats else '*.csv'
+        for f in glob(path.join(dataset_path, form)):
+            if mats:
+                i = Image.open(f.replace('.npz', '.png'))
+            else:
+                i = Image.open(f.replace('.csv', '.png'))
             i.load()
-            lbl = np.loadtxt(f, dtype=np.float32, delimiter=',')
-            self.data.append(
-                (i, lbl[3:6], lbl[:3]))
+
+            if mats:
+                m = np.load(f)
+                self.data.append(
+                    (i, m['player_location'], m['proj'], m['view'], m['puck_location']))
+            else:
+                lbl = np.loadtxt(f, dtype=np.float32, delimiter=',')
+                self.data.append(
+                    (i, lbl[3:6], lbl[:3]))
         self.transform = transform
 
     def __len__(self):
@@ -88,8 +88,8 @@ class SuperTuxDataset(Dataset):
         return data
 
 
-def load_data(dataset_path, transform=dense_transforms.ToTensor(), num_workers=0, batch_size=128):
-    dataset = SuperTuxDataset(dataset_path, transform=transform)
+def load_data(dataset_path, transform=dense_transforms.ToTensor(), num_workers=0, batch_size=128, mats=False):
+    dataset = SuperTuxDataset(dataset_path, transform=transform, mats=mats)
     return DataLoader(dataset, num_workers=num_workers, batch_size=batch_size, shuffle=True, drop_last=True)
 
 

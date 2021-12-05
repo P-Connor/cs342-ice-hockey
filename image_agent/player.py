@@ -5,6 +5,7 @@ import random
 import torch
 from grader import utils
 from torchvision.transforms import functional as F
+from image_agent.utils import _to_image
 
 
 class Team:
@@ -19,6 +20,7 @@ class Team:
         self.num_players = None
         self.test_target = [20, 0, 20]
         self.model = utils.load_model()
+        self.i = 0
 
     def new_match(self, team: int, num_players: int) -> list:
         """
@@ -74,19 +76,36 @@ class Team:
         """
 
         imgs = torch.cat([F.to_tensor(img).unsqueeze(0)
-                          for img in player_image])  # .unsqueeze(0)
+                          for img in player_image])
 
         pos = torch.cat([torch.tensor(player_state[i]['kart']['location']).unsqueeze(
             0) for i in range(len(player_state))])
 
         pos_puck_location = self.model(imgs, pos)
 
-        # chesks results from model. If puck position unknown, set to None
+        # checks results from model. If puck position unknown, set to None
         puck_location = None
         if pos_puck_location[0][1] != -1:
             puck_location = pos_puck_location[0]
         elif pos_puck_location[1][1] != -1:
             puck_location = pos_puck_location[1]
+
+        import matplotlib.pyplot as plt
+        import torchvision.transforms.functional as TF
+        img = player_image[0]
+        print(img.shape)
+        pred = _to_image(puck_location.detach().numpy(), player_state[0]['camera']
+                         ['projection'], player_state[0]['camera']['view'])
+        fig, ax = plt.subplots(1, 1)
+        ax.imshow(TF.to_pil_image(img))
+
+        WH2 = np.array([img.shape[1], img.shape[0]])/2
+        ax.add_artist(plt.Circle(
+            WH2*(pred+1), 2, ec='r', fill=False, lw=1.5))
+        if self.i % 50 == 0:
+            plt.show()
+
+        self.i += 1
 
         ret = []
         for player in player_state:

@@ -12,6 +12,7 @@ def train(args):
     train_logger, valid_logger = None, None
     if args.log_dir is not None:
         train_logger = tb.SummaryWriter(path.join(args.log_dir, 'train'))
+        valid_logger = tb.SummaryWriter(path.join(args.log_dir, 'valid'))
 
     """
     Your code here, modify your HW4 code
@@ -36,6 +37,8 @@ def train(args):
 
     train_data = load_data(
         'image_data/train', num_workers=args.num_workers)
+    valid_data = load_data(
+        'image_data/valid', num_workers=args.num_workers, mats=True)
 
     global_step = 0 + args.start_at * len(train_data)
     for epoch in range(args.start_at, args.num_epoch):
@@ -43,16 +46,14 @@ def train(args):
         losses = []
         for img, pos, label in train_data:
             img, pos, label = img.to(device), pos.to(device), label.to(device)
-            # Remove player location and facing direction from label
-            # label = label[0:2:1]
 
             pred = model(img, pos)
             loss_val = loss(pred, label)
 
             if train_logger is not None:
                 train_logger.add_scalar('loss', loss_val, global_step)
-                if global_step % 100 == 0:
-                    log(train_logger, img, label, pred, global_step)
+                # if global_step % 100 == 0:
+                #     log(train_logger, img, label, pred, global_step)
 
             optimizer.zero_grad()
             loss_val.backward()
@@ -61,6 +62,25 @@ def train(args):
 
             losses.append(loss_val.detach().cpu().numpy())
 
+        model.eval()
+        for img, pos, proj, view, label in valid_data:
+            img, pos, label = img.float().to(device), pos.float().to(
+                device), label.float().to(device)
+
+            pred = model(img, pos)
+            loss_val = loss(pred, label)
+
+            if valid_logger is not None:
+                valid_logger.add_scalar('loss', loss_val, global_step)
+                pred = _to_image(
+                    pred.cpu().detach().numpy()[0], proj[0], view[0])
+                label = _to_image(
+                    label.cpu().detach().numpy()[0], proj[0], view[0])
+                log(valid_logger, img, label, pred,
+                    global_step, pred[1] <= 0)
+
+            global_step += 1
+
         avg_loss = np.mean(losses)
         print('Finished epoch %-3d \t loss = %0.3f' % (epoch, avg_loss))
         save_model(model)
@@ -68,18 +88,17 @@ def train(args):
     save_model(model)
 
 
-def log(logger, img, label, pred, global_step):
-    pred = _to_image(label[0])
-    label = torch.tensor([1, 1])
+def log(logger, img, label, pred, global_step, out):
     import matplotlib.pyplot as plt
     import torchvision.transforms.functional as TF
     fig, ax = plt.subplots(1, 1)
     ax.imshow(TF.to_pil_image(img[0].cpu()))
     WH2 = np.array([img.size(-1), img.size(-2)])/2
     ax.add_artist(plt.Circle(
-        WH2*(label.cpu().detach().numpy()+1), 2, ec='g', fill=False, lw=1.5))
-    ax.add_artist(plt.Circle(
-        WH2*(pred.cpu().detach().numpy()+1), 2, ec='r', fill=False, lw=1.5))
+        WH2*(label+1), 2, ec='g', fill=False, lw=1.5))
+    if not out:
+        ax.add_artist(plt.Circle(
+            WH2*(pred+1), 2, ec='r', fill=False, lw=1.5))
     logger.add_figure('viz', fig, global_step)
     del ax, fig
 
