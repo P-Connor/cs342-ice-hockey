@@ -2,7 +2,7 @@ from .model import PuckLocator, save_model
 import torch
 import torch.utils.tensorboard as tb
 import numpy as np
-from .utils import load_data
+from .utils import load_data, _to_image
 from . import dense_transforms
 
 
@@ -15,7 +15,7 @@ def train(args):
 
     """
     Your code here, modify your HW4 code
-    
+
     """
     import torch
 
@@ -35,18 +35,18 @@ def train(args):
     #     dense_transforms) if inspect.isclass(v)})
 
     train_data = load_data(
-        'image_data', num_workers=args.num_workers)
+        'image_data/train', num_workers=args.num_workers)
 
     global_step = 0 + args.start_at * len(train_data)
     for epoch in range(args.start_at, args.num_epoch):
         model.train()
         losses = []
-        for img, label in train_data:
-            img, label = img.to(device), label.to(device)
+        for img, pos, label in train_data:
+            img, pos, label = img.to(device), pos.to(device), label.to(device)
             # Remove player location and facing direction from label
             # label = label[0:2:1]
 
-            pred = model(img)
+            pred = model(img, pos)
             loss_val = loss(pred, label)
 
             if train_logger is not None:
@@ -69,15 +69,17 @@ def train(args):
 
 
 def log(logger, img, label, pred, global_step):
+    pred = _to_image(label[0])
+    label = torch.tensor([1, 1])
     import matplotlib.pyplot as plt
     import torchvision.transforms.functional as TF
     fig, ax = plt.subplots(1, 1)
     ax.imshow(TF.to_pil_image(img[0].cpu()))
     WH2 = np.array([img.size(-1), img.size(-2)])/2
     ax.add_artist(plt.Circle(
-        WH2*(label[0].cpu().detach().numpy()+1), 2, ec='g', fill=False, lw=1.5))
-    # ax.add_artist(plt.Circle(
-    #     WH2*(pred[0].cpu().detach().numpy()+1), 2, ec='r', fill=False, lw=1.5))
+        WH2*(label.cpu().detach().numpy()+1), 2, ec='g', fill=False, lw=1.5))
+    ax.add_artist(plt.Circle(
+        WH2*(pred.cpu().detach().numpy()+1), 2, ec='r', fill=False, lw=1.5))
     logger.add_figure('viz', fig, global_step)
     del ax, fig
 

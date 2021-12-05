@@ -1,8 +1,6 @@
 import torch.nn.functional as F
 import torch
 
-# TODO change all of this. This was just copied from the homework 3 solution
-
 
 class PuckLocator(torch.nn.Module):
     class Block(torch.nn.Module):
@@ -31,14 +29,16 @@ class PuckLocator(torch.nn.Module):
             L.append(self.Block(c, l, kernel_size, 2))
             c = l
         self.network = torch.nn.Sequential(*L)
-        self.classifier = torch.nn.Linear(c, n_output_channels)
+        self.classifier = torch.nn.Linear(c + 3, n_output_channels)
         self.input_mean = torch.Tensor([0.3235, 0.3310, 0.3445])
         self.input_std = torch.Tensor([0.2533, 0.2224, 0.2483])
 
-    def forward(self, x):
-        z = self.network((x - self.input_mean[None, :, None, None].to(
-            x.device)) / self.input_std[None, :, None, None].to(x.device))
-        return self.classifier(z.mean(dim=[2, 3]))
+    def forward(self, img, pos):
+        z = self.network((img - self.input_mean[None, :, None, None].to(
+            img.device)) / self.input_std[None, :, None, None].to(img.device))
+        z = z.mean(dim=[2, 3])
+        z = torch.cat((z, pos), dim=1)
+        return self.classifier(z)
 
 
 def save_model(model):

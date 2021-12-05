@@ -1,6 +1,13 @@
 
 import numpy as np
-import math, random
+import math
+import random
+# from torch import load
+import torch
+from grader import utils
+from torchvision.transforms import functional as F
+# from image_agent import utils
+
 
 class Team:
     agent_type = 'image'
@@ -13,6 +20,8 @@ class Team:
         self.team = None
         self.num_players = None
         self.test_target = [20, 0, 20]
+        self.model = utils.load_model()
+        # utils.load_model()
 
     def new_match(self, team: int, num_players: int) -> list:
         """
@@ -37,7 +46,8 @@ class Team:
         DO NOT CALL any pystk functions here. It will crash your program on your grader.
 
         :param player_state: list[dict] describing the state of the players of this team. The state closely follows
-                             the pystk.Player object <https://pystk.readthedocs.io/en/latest/state.html#pystk.Player>.
+                             # pystk.Player>.
+                             the pystk.Player object <https://pystk.readthedocs.io/en/latest/state.html
                              See HW5 for some inspiration on how to use the camera information.
                              camera:  Camera info for each player
                                - aspect:     Aspect ratio
@@ -66,46 +76,61 @@ class Team:
                  steer:        float -1..1 steering angle
         """
 
-        # TODO: Get puck location from model
-        puck_location = np.array([-20,0,10])
+        imgs = torch.cat([F.to_tensor(img).unsqueeze(0)
+                          for img in player_image])  # .unsqueeze(0)
+
+        pos = torch.cat([torch.tensor(player_state[i]['kart']['location']).unsqueeze(
+            0) for i in range(len(player_state))])
+
+        pos_puck_location = self.model(imgs, pos)
+
+        # chesks results from model. If puck position unknown, set to None
+        puck_location = None
+        if pos_puck_location[0][1] != -1:
+            puck_location = pos_puck_location[0]
+        elif pos_puck_location[1][1] != -1:
+            puck_location = pos_puck_location[1]
 
         ret = []
         for player in player_state:
-          
-          # Populate this with the actions we will take for this player
-          actions = dict()
-          
-          # TODO: Calculate a drive target based on puck location and other variables
-          target = self.test_target
+            # self.model(player_image, player_state[0]['kart']['location'])
+            # Populate this with the actions we will take for this player
+            actions = dict()
 
-          # Get some preliminary information
-          current_location = np.array(player['kart']['location'])
-          current_location[1] = 0   # Remove y coordinate
-          distance_to_target = np.linalg.norm(target - current_location)
+            # TODO: Calculate a drive target based on puck location and other variables
+            target = self.test_target
 
-          # Find angle_to_target, mapped from -1 to 1
-          facing = player['kart']['front'] - current_location
-          facing[1] = 0   # Remove y coordinate
-          facing_u = facing / np.linalg.norm(facing)
-          to_target = target - current_location
-          to_target_u = to_target / np.linalg.norm(to_target)
-          angle_to_target = (np.arccos(np.clip(np.dot(facing_u, to_target_u), -1.0, 1.0)) / math.pi) * np.sign(np.cross(facing_u, to_target_u)[1])
-          # print(angle_to_target, distance_to_target)
+            # Get some preliminary information
+            current_location = np.array(player['kart']['location'])
+            current_location[1] = 0   # Remove y coordinate
+            distance_to_target = np.linalg.norm(target - current_location)
 
-          # Handle steering/drifting
-          actions['steer'] = angle_to_target * 5
-          actions['drift'] = 0.2 < abs(angle_to_target) < 0.4
-          
-          # Calculate acceleration/braking
-          actions['acceleration'] = 1 - abs(angle_to_target) * 3
-          actions['brake'] = abs(angle_to_target) > 0.5
+            # Find angle_to_target, mapped from -1 to 1
+            facing = player['kart']['front'] - current_location
+            facing[1] = 0   # Remove y coordinate
+            facing_u = facing / np.linalg.norm(facing)
+            to_target = target - current_location
+            to_target_u = to_target / np.linalg.norm(to_target)
+            angle_to_target = (np.arccos(np.clip(np.dot(facing_u, to_target_u), -1.0, 1.0)
+                                         ) / math.pi) * np.sign(np.cross(facing_u, to_target_u)[1])
+            # print(angle_to_target, distance_to_target)
 
-          # Reset if stuck (handle this better later)
-          actions['rescue'] = actions['acceleration'] > 0.3 and np.linalg.norm(player['kart']['velocity']) < 0.05
+            # Handle steering/drifting
+            actions['steer'] = angle_to_target * 5
+            actions['drift'] = 0.2 < abs(angle_to_target) < 0.4
 
-          if(distance_to_target < 3):
-            self.test_target = [random.randint(-20, 20), 0, random.randint(-20, 20)]
-          
-          ret.append(actions)
-        
+            # Calculate acceleration/braking
+            actions['acceleration'] = 1 - abs(angle_to_target) * 3
+            actions['brake'] = abs(angle_to_target) > 0.5
+
+            # Reset if stuck (handle this better later)
+            actions['rescue'] = actions['acceleration'] > 0.3 and np.linalg.norm(
+                player['kart']['velocity']) < 0.05
+
+            if(distance_to_target < 3):
+                self.test_target = [
+                    random.randint(-20, 20), 0, random.randint(-20, 20)]
+
+            ret.append(actions)
+
         return ret
