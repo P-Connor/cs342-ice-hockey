@@ -1,6 +1,6 @@
 import numpy as np
 import imageio
-# from .model import PuckLocator
+from .model import PuckLocator
 
 
 from torch.utils.data import Dataset, DataLoader
@@ -78,6 +78,7 @@ class SuperTuxDataset(Dataset):
             self.data.append(
                 (i, lbl[3:6], lbl[:3]))
         self.transform = transform
+        print("DATASET LEN " + str(len(self.data)), dataset_path)
 
     def __len__(self):
         return len(self.data)
@@ -93,13 +94,13 @@ def load_data(dataset_path, transform=dense_transforms.ToTensor(), num_workers=0
     return DataLoader(dataset, num_workers=num_workers, batch_size=batch_size, shuffle=True, drop_last=True)
 
 
-# def load_model():
-#     from torch import load
-#     from os import path
-#     r = PuckLocator()
-#     r.load_state_dict(load(path.join(path.dirname(
-#         path.abspath(__file__)), 'puck_locator.th'), map_location='cpu'))
-#     return r
+def load_model():
+    from torch import load
+    from os import path
+    r = PuckLocator()
+    r.load_state_dict(load(path.join(path.dirname(
+        path.abspath(__file__)), 'puck_locator.th'), map_location='cpu'))
+    return r
 
 
 if __name__ == '__main__':
